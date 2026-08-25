@@ -1,0 +1,18 @@
+{
+    "request": {
+        "method": "POST",
+        "url": "/users/create"
+    },
+    "response": {
+        "status": 201,
+        "statusMessage": "User Created.",
+        "jsonBody": {
+            "id": 3,
+            "name": "New User 1",
+            "created": true
+        },
+        "headers": {
+            "Content-Type": "application/json"
+        }
+    }
+}
