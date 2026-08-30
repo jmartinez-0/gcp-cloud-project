@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User List App</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        button { padding: 8px 15px; cursor: pointer; }
+        .user-card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        #login-section { display: block; }
+        #users-section { display: none; }
+    </style>
+</head>
+<body>
+    <div id="login-section">
+        <h2>Login</h2>
+        <input id="email" type="email" placeholder="Email">
+        <input id="password" type="password" placeholder="Password">
+        <button onclick="handleLogin()">Login</button>
+        <button onclick="handleSignup()">Sign Up</button>
+    </div>
+
+    <div id="users-section">
+        <h2>Users</h2>
+        <button onclick="handleLogout()">Logout</button>
+        <div id="user-list"></div>
+    </div>
+
+<!--    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js"></script>
+-->
+<!--     <script src="app.js"></script> -->
+</body>
+</html>
