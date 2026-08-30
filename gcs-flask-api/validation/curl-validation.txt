@@ -1,0 +1,23 @@
+BASE="cloud-run-endpoint.com"
+
+# Health check
+curl -i "$BASE/api/health"
+
+# Get all users. Tests the service account's storage.objects.get permission.
+curl -i "$BASE/api/users"
+
+# Get one user
+curl -i "$BASE/api/users/1"
+
+# Create a user. Tests bucket read and write permissions.
+curl -i -X POST "$BASE/api/users" \
+	-H "Content-Type: application/json" \
+	-d '{"name":"Test User","email":"test@example.com","age":30,"location":"Seattle","job_title":"Engineer","created_at":"2026-08-28"}'
+
+# Update a user
+curl -i -X PUT "$BASE/api/users/1" \
+	-H "Content-Type: application/json" \
+	-d '{"location":"Portland"}'
+
+# Delete a user. This permanently modifies users.json.
+curl -i -X DELETE "$BASE/api/users/28"
