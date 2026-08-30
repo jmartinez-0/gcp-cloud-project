@@ -14,6 +14,7 @@ load_dotenv(BASE_DIR / ".env")
 app = Flask(__name__)
 CORS(app)
 
+# Merge this with my ../backend-data/app.py code to create a single Flask app that uses both GCS and Firebase for user management.
 
 def initialize_firebase():
     """Initialize Firebase Admin SDK for local dev and Cloud Run."""
