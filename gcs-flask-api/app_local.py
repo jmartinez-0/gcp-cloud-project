@@ -1,13 +1,18 @@
 import json
 import os
 import tempfile
+from functools import wraps
 from pathlib import Path
 from threading import Lock
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
+import firebase_admin
+from firebase_admin import auth, credentials
 
 
 app = Flask(__name__)
+CORS(app)
 DATA_FILE = Path(
     os.environ.get(
         "USERS_FILE",
@@ -15,6 +20,55 @@ DATA_FILE = Path(
     )
 ).resolve()
 DATA_LOCK = Lock()
+
+
+def initialize_firebase():
+    """Initialize Firebase Admin SDK from a local service-account JSON file."""
+    if firebase_admin._apps:
+        return
+
+    service_account_path = (
+        os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
+        or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    )
+    if not service_account_path:
+        raise RuntimeError(
+            "Set FIREBASE_SERVICE_ACCOUNT_PATH or GOOGLE_APPLICATION_CREDENTIALS "
+            "to your Firebase service-account JSON file."
+        )
+
+    credential_path = Path(service_account_path)
+    if not credential_path.is_absolute():
+        credential_path = (Path(__file__).resolve().parent.parent / credential_path).resolve()
+    if not credential_path.is_file():
+        raise RuntimeError(f"Firebase service-account file not found: {credential_path}")
+    firebase_admin.initialize_app(credentials.Certificate(str(credential_path)))
+
+
+initialize_firebase()
+
+
+def verify_firebase_token(route_handler):
+    """Require a valid Firebase ID token for every API route."""
+    @wraps(route_handler)
+    def decorated_handler(*args, **kwargs):
+        authorization = request.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            return jsonify({"error": "Missing Bearer token"}), 401
+
+        token = authorization.removeprefix("Bearer ").strip()
+        if not token:
+            return jsonify({"error": "Missing Bearer token"}), 401
+
+        try:
+            decoded_token = auth.verify_id_token(token)
+        except Exception:
+            return jsonify({"error": "Invalid or expired Firebase token"}), 401
+
+        request.firebase_user = decoded_token
+        return route_handler(*args, **kwargs)
+
+    return decorated_handler
 
 
 def load_users():
@@ -56,17 +110,20 @@ def get_users():
 
 
 @app.get("/api/health")
+@verify_firebase_token
 def health_check():
     return jsonify({"status": "healthy"}), 200
 
 
 @app.get("/api/users")
+@verify_firebase_token
 def get_all_users():
     with DATA_LOCK:
         return get_users()
 
 
 @app.get("/api/users/<int:user_id>")
+@verify_firebase_token
 def get_user(user_id):
     with DATA_LOCK:
         users, error_response = load_users()
@@ -79,6 +136,7 @@ def get_user(user_id):
 
 
 @app.post("/api/users")
+@verify_firebase_token
 def create_user():
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not data.get("name") or not data.get("email"):
@@ -89,9 +147,13 @@ def create_user():
         if error_response:
             return error_response
         new_id = max((user.get("id", 0) for user in users), default=0) + 1
-        new_user = {"id": new_id, **{key: data.get(key) for key in (
-            "name", "email", "age", "location", "job_title", "created_at"
-        )}}
+        new_user = {
+            "id": new_id,
+            "uid": request.firebase_user["uid"],
+            **{key: data.get(key) for key in (
+                "name", "email", "age", "location", "job_title", "created_at"
+            )},
+        }
         users.append(new_user)
         error_response = save_users(users)
         if error_response:
@@ -100,6 +162,7 @@ def create_user():
 
 
 @app.put("/api/users/<int:user_id>")
+@verify_firebase_token
 def update_user(user_id):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -112,7 +175,9 @@ def update_user(user_id):
         user = next((user for user in users if user.get("id") == user_id), None)
         if user is None:
             return jsonify({"error": "User not found"}), 404
-        user.update({key: value for key, value in data.items() if key != "id"})
+        user.update({
+            key: value for key, value in data.items() if key not in {"id", "uid"}
+        })
         error_response = save_users(users)
         if error_response:
             return error_response
@@ -120,6 +185,7 @@ def update_user(user_id):
 
 
 @app.delete("/api/users/<int:user_id>")
+@verify_firebase_token
 def delete_user(user_id):
     with DATA_LOCK:
         users, error_response = load_users()
