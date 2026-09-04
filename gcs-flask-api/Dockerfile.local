@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY gcs-flask-api/requirements-local.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY gcs-flask-api/app_local.py ./app_local.py
+COPY backend-data/users.json ./backend-data/users.json
+
+ENV PORT=8080
+ENV USERS_FILE=/app/backend-data/users.json
+EXPOSE 8080
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "app_local:app"]
