@@ -1,0 +1,311 @@
+openapi: 3.0.3
+info:
+  title: Local Firebase-authenticated Users API
+  version: 1.0.0
+  description: |
+    File-backed local version of the users API. Every endpoint requires a
+    Firebase ID token in the Authorization header.
+servers:
+  - url: http://localhost:5000
+    description: Docker host port
+  - url: http://localhost:8080
+    description: Direct application port
+
+tags:
+  - name: Health
+  - name: Users
+
+security:
+  - firebaseBearer: []
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Check API health
+      operationId: getHealth
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: healthy
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List all users
+      operationId: listUsers
+      responses:
+        '200':
+          description: A list of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Users]
+      summary: Create a user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            example:
+              name: Local Test User
+              email: local@example.com
+              age: 30
+              location: Seattle, USA
+              job_title: Engineer
+              created_at: '2026-09-03T12:00:00'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Users]
+      summary: Get a user by ID
+      operationId: getUser
+      responses:
+        '200':
+          description: The requested user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [Users]
+      summary: Update a user
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      operationId: deleteUser
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: User deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  securitySchemes:
+    firebaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+      description: Firebase ID token obtained after the user signs in.
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: Numeric user ID
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+
+  schemas:
+    User:
+      type: object
+      required: [id, name, email]
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 1
+        uid:
+          type: string
+          description: Firebase UID of the user who created this record. Legacy records may omit this field.
+          example: firebase-user-uid
+        name:
+          type: string
+          example: Alice Johnson
+        email:
+          type: string
+          format: email
+          example: alice.johnson@example.com
+        age:
+          type: integer
+          nullable: true
+          example: 28
+        location:
+          type: string
+          nullable: true
+          example: San Francisco, USA
+        job_title:
+          type: string
+          nullable: true
+          example: Senior Software Engineer
+        created_at:
+          type: string
+          nullable: true
+          example: '2026-01-15T10:30:00'
+
+    CreateUserRequest:
+      type: object
+      required: [name, email]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        age:
+          type: integer
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        job_title:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+
+    UpdateUserRequest:
+      type: object
+      description: Any user fields may be updated except id and uid.
+      additionalProperties: true
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        age:
+          type: integer
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        job_title:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: healthy
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request body or missing required fields
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing, invalid, or expired Firebase ID token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              value:
+                error: Missing Bearer token
+            invalidToken:
+              value:
+                error: Invalid or expired Firebase token
+    NotFound:
+      description: User does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: User not found
+    ServerError:
+      description: The users file could not be read or saved
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
