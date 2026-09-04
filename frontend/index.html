@@ -23,6 +23,18 @@
     <div id="users-section">
         <h2>Users</h2>
         <button id="logout-btn">Logout</button>
+        <form id="user-form">
+            <h3 id="user-form-title">Create user</h3>
+            <input id="user-id" type="hidden">
+            <input id="user-name" type="text" placeholder="Name" required>
+            <input id="user-email" type="email" placeholder="Email" required>
+            <input id="user-age" type="number" placeholder="Age">
+            <input id="user-location" type="text" placeholder="Location">
+            <input id="user-job-title" type="text" placeholder="Job title">
+            <input id="user-created-at" type="text" placeholder="Created at">
+            <button type="submit">Save user</button>
+            <button id="cancel-edit-btn" type="button" hidden>Cancel edit</button>
+        </form>
         <div id="user-list"></div>
     </div>
     <script src="config.js"></script>
