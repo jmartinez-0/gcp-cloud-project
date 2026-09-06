@@ -18,6 +18,8 @@ def initialize_firebase():
     if firebase_admin._apps:
         return
 
+    firebase_project_id = os.environ.get("FIREBASE_PROJECT_ID")
+    firebase_options = {"projectId": firebase_project_id} if firebase_project_id else None
     service_account_path = (
         os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
         or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -28,11 +30,14 @@ def initialize_firebase():
             credential_path = (Path(__file__).resolve().parent.parent / credential_path).resolve()
         if not credential_path.is_file():
             raise RuntimeError(f"Firebase service-account file not found: {credential_path}")
-        firebase_admin.initialize_app(credentials.Certificate(str(credential_path)))
+        firebase_admin.initialize_app(
+            credentials.Certificate(str(credential_path)),
+            options=firebase_options,
+        )
         return
 
     # Cloud Run and other Google-managed runtimes provide Application Default Credentials.
-    firebase_admin.initialize_app()
+    firebase_admin.initialize_app(options=firebase_options)
 
 
 initialize_firebase()
@@ -52,7 +57,8 @@ def verify_firebase_token(route_handler):
 
         try:
             decoded_token = auth.verify_id_token(token)
-        except Exception:
+        except Exception as error:
+            app.logger.warning("Firebase ID token verification failed: %s", error)
             return jsonify({"error": "Invalid or expired Firebase token"}), 401
 
         request.firebase_user = decoded_token
