@@ -20,7 +20,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const BACKEND_URL = appConfig.BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = appConfig.BACKEND_URL || "";
 
 async function getAuthHeaders() {
   if (!auth.currentUser) {
