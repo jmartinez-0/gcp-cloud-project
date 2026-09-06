@@ -82,7 +82,7 @@ The service account's home project and the Firebase project may be different.
 
 Install and authenticate the Google Cloud CLI:
 
-```powershell
+```bash
 gcloud auth login
 gcloud auth application-default login
 gcloud config set project <COMPUTE_PROJECT_ID>
@@ -90,11 +90,11 @@ gcloud config set project <COMPUTE_PROJECT_ID>
 
 Enable the services needed by the deployment:
 
-```powershell
-gcloud services enable run.googleapis.com `
-  cloudbuild.googleapis.com `
-  artifactregistry.googleapis.com `
-  storage.googleapis.com `
+```bash
+gcloud services enable run.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com \
+  storage.googleapis.com \
   --project=<COMPUTE_PROJECT_ID>
 ```
 
@@ -115,26 +115,26 @@ Use the Cloud Run runtime service account for both Firebase Admin and Cloud Stor
 
 Grant the runtime identity access to the Firebase project if required by the project policy:
 
-```powershell
-gcloud projects add-iam-policy-binding <FIREBASE_PROJECT_ID> `
-  --member="serviceAccount:<RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com" `
+```bash
+gcloud projects add-iam-policy-binding <FIREBASE_PROJECT_ID> \
+  --member="serviceAccount:<RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com" \
   --role="roles/firebaseauth.admin"
 ```
 
 Grant the least-privilege bucket role needed by the API. Because this API reads and writes the JSON object, `roles/storage.objectAdmin` is a suitable starting point:
 
-```powershell
-gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET_NAME> `
-  --member="serviceAccount:<RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com" `
+```bash
+gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET_NAME> \
+  --member="serviceAccount:<RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com" \
   --role="roles/storage.objectAdmin"
 ```
 
 `roles/iam.serviceAccountTokenCreator` is usually granted to a human, CI/CD identity, or deployment identity that impersonates the runtime service account. It is not normally needed by the runtime service account to validate Firebase tokens or read the bucket:
 
-```powershell
-gcloud iam service-accounts add-iam-policy-binding `
-  <RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com `
-  --member="user:<DEPLOYER_EMAIL>" `
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+  <RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com \
+  --member="user:<DEPLOYER_EMAIL>" \
   --role="roles/iam.serviceAccountTokenCreator"
 ```
 
@@ -142,17 +142,17 @@ Avoid adding `roles/firebase.sdkAdminServiceAgent` to a user-managed runtime ser
 
 Verify project-level access:
 
-```powershell
-gcloud projects get-iam-policy <FIREBASE_PROJECT_ID> `
-  --flatten="bindings[].members" `
-  --filter="bindings.members:<RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com" `
+```bash
+gcloud projects get-iam-policy <FIREBASE_PROJECT_ID> \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:<RUNTIME_SERVICE_ACCOUNT>@<COMPUTE_PROJECT_ID>.iam.gserviceaccount.com" \
   --format="table(bindings.role)"
 ```
 
 Verify bucket-level access:
 
-```powershell
-gcloud storage buckets get-iam-policy gs://<GCS_BUCKET_NAME> `
+```bash
+gcloud storage buckets get-iam-policy gs://<GCS_BUCKET_NAME> \
   --format="yaml(bindings)"
 ```
 
@@ -160,44 +160,44 @@ gcloud storage buckets get-iam-policy gs://<GCS_BUCKET_NAME> `
 
 Run these commands from the repository root. Set the image location and service values first:
 
-```powershell
-$COMPUTE_PROJECT_ID = "<COMPUTE_PROJECT_ID>"
-$REGION = "<CLOUD_RUN_REGION>"
-$REPOSITORY = "<ARTIFACT_REGISTRY_REPOSITORY>"
-$IMAGE = "$REGION-docker.pkg.dev/$COMPUTE_PROJECT_ID/$REPOSITORY/backend-api"
-$SERVICE = "<CLOUD_RUN_SERVICE_NAME>"
-$RUNTIME_SERVICE_ACCOUNT = "<RUNTIME_SERVICE_ACCOUNT>@$COMPUTE_PROJECT_ID.iam.gserviceaccount.com"
-$FIREBASE_PROJECT_ID = "<FIREBASE_PROJECT_ID>"
-$GCS_BUCKET_NAME = "<GCS_BUCKET_NAME>"
-$TAG = (git rev-parse --short HEAD)
+```bash
+COMPUTE_PROJECT_ID="<COMPUTE_PROJECT_ID>"
+REGION="<CLOUD_RUN_REGION>"
+REPOSITORY="<ARTIFACT_REGISTRY_REPOSITORY>"
+IMAGE="$REGION-docker.pkg.dev/$COMPUTE_PROJECT_ID/$REPOSITORY/backend-api"
+SERVICE="<CLOUD_RUN_SERVICE_NAME>"
+RUNTIME_SERVICE_ACCOUNT="<RUNTIME_SERVICE_ACCOUNT>@$COMPUTE_PROJECT_ID.iam.gserviceaccount.com"
+FIREBASE_PROJECT_ID="<FIREBASE_PROJECT_ID>"
+GCS_BUCKET_NAME="<GCS_BUCKET_NAME>"
+TAG="$(git rev-parse --short HEAD)"
 ```
 
 Create the Artifact Registry repository once if it does not already exist:
 
-```powershell
-gcloud artifacts repositories create $REPOSITORY `
-  --repository-format=docker `
-  --location=$REGION `
+```bash
+gcloud artifacts repositories create "$REPOSITORY" \
+  --repository-format=docker \
+  --location="$REGION" \
   --project=$COMPUTE_PROJECT_ID
 ```
 
 Build and push the image. A unique tag makes it clear which source revision is deployed:
 
-```powershell
-gcloud builds submit . `
-  --project=$COMPUTE_PROJECT_ID `
-  --tag="$IMAGE`:$TAG"
+```bash
+gcloud builds submit . \
+  --project="$COMPUTE_PROJECT_ID" \
+  --tag="$IMAGE:$TAG"
 ```
 
 Deploy the image to Cloud Run:
 
-```powershell
-gcloud run deploy $SERVICE `
-  --project=$COMPUTE_PROJECT_ID `
-  --region=$REGION `
-  --image="$IMAGE`:$TAG" `
-  --service-account=$RUNTIME_SERVICE_ACCOUNT `
-  --set-env-vars="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,GCS_BUCKET_NAME=$GCS_BUCKET_NAME" `
+```bash
+gcloud run deploy "$SERVICE" \
+  --project="$COMPUTE_PROJECT_ID" \
+  --region="$REGION" \
+  --image="$IMAGE:$TAG" \
+  --service-account="$RUNTIME_SERVICE_ACCOUNT" \
+  --set-env-vars="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,GCS_BUCKET_NAME=$GCS_BUCKET_NAME" \
   --allow-unauthenticated
 ```
 
@@ -205,10 +205,10 @@ gcloud run deploy $SERVICE `
 
 When only environment variables or Cloud Run settings change, rebuilding is unnecessary:
 
-```powershell
-gcloud run services update $SERVICE `
-  --project=$COMPUTE_PROJECT_ID `
-  --region=$REGION `
+```bash
+gcloud run services update "$SERVICE" \
+  --project="$COMPUTE_PROJECT_ID" \
+  --region="$REGION" \
   --update-env-vars="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,GCS_BUCKET_NAME=$GCS_BUCKET_NAME"
 ```
 
@@ -266,8 +266,8 @@ DELETE /api/users/<id>
 
 Example request:
 
-```powershell
-curl.exe -i "https://<CLOUD_RUN_SERVICE_URL>/api/health" `
+```bash
+curl -i "https://<CLOUD_RUN_SERVICE_URL>/api/health" \
   -H "Authorization: Bearer <FIREBASE_ID_TOKEN>"
 ```
 
@@ -282,10 +282,10 @@ For local file-backed testing, follow [gcs-flask-api/README.local.md](gcs-flask-
 
 For local testing of the cloud version, use Application Default Credentials or set a local service-account path:
 
-```powershell
-$env:FIREBASE_PROJECT_ID = "<FIREBASE_PROJECT_ID>"
-$env:GCS_BUCKET_NAME = "<GCS_BUCKET_NAME>"
-$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\path\to\service-account.json"
+```bash
+export FIREBASE_PROJECT_ID="<FIREBASE_PROJECT_ID>"
+export GCS_BUCKET_NAME="<GCS_BUCKET_NAME>"
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 py -3 gcs-flask-api/app.py
 ```
 
@@ -301,11 +301,11 @@ Never commit the JSON key. Add local credential paths and environment files to `
 4. Confirm the deployed revision has `FIREBASE_PROJECT_ID` set.
 5. Inspect Cloud Run logs for the underlying Admin SDK error:
 
-```powershell
-gcloud logging read `
-  'resource.type="cloud_run_revision" AND resource.labels.service_name="<CLOUD_RUN_SERVICE_NAME>"' `
-  --project=<COMPUTE_PROJECT_ID> `
-  --limit=50 `
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="<CLOUD_RUN_SERVICE_NAME>"' \
+  --project=<COMPUTE_PROJECT_ID> \
+  --limit=50 \
   --format="value(textPayload)"
 ```
 
@@ -330,10 +330,10 @@ Confirm that:
 
 ### Check the deployed configuration
 
-```powershell
-gcloud run services describe <CLOUD_RUN_SERVICE_NAME> `
-  --project=<COMPUTE_PROJECT_ID> `
-  --region=<CLOUD_RUN_REGION> `
+```bash
+gcloud run services describe <CLOUD_RUN_SERVICE_NAME> \
+  --project=<COMPUTE_PROJECT_ID> \
+  --region=<CLOUD_RUN_REGION> \
   --format="yaml(spec.template.spec.serviceAccountName,spec.template.spec.containers[0].env,spec.template.spec.containers[0].ports)"
 ```
 
