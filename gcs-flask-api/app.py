@@ -1,9 +1,64 @@
+from functools import wraps
+from pathlib import Path
+
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from google.cloud import storage
+import firebase_admin
+from firebase_admin import auth, credentials
 import json
 import os
 
 app = Flask(__name__)
+CORS(app)
+
+
+def initialize_firebase():
+    """Initialize Firebase Admin SDK from local or Google runtime credentials."""
+    if firebase_admin._apps:
+        return
+
+    service_account_path = (
+        os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
+        or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    )
+    if service_account_path:
+        credential_path = Path(service_account_path)
+        if not credential_path.is_absolute():
+            credential_path = (Path(__file__).resolve().parent.parent / credential_path).resolve()
+        if not credential_path.is_file():
+            raise RuntimeError(f"Firebase service-account file not found: {credential_path}")
+        firebase_admin.initialize_app(credentials.Certificate(str(credential_path)))
+        return
+
+    # Cloud Run and other Google-managed runtimes provide Application Default Credentials.
+    firebase_admin.initialize_app()
+
+
+initialize_firebase()
+
+
+def verify_firebase_token(route_handler):
+    """Require a valid Firebase ID token for every API route."""
+    @wraps(route_handler)
+    def decorated_handler(*args, **kwargs):
+        authorization = request.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            return jsonify({"error": "Missing Bearer token"}), 401
+
+        token = authorization.removeprefix("Bearer ").strip()
+        if not token:
+            return jsonify({"error": "Missing Bearer token"}), 401
+
+        try:
+            decoded_token = auth.verify_id_token(token)
+        except Exception:
+            return jsonify({"error": "Invalid or expired Firebase token"}), 401
+
+        request.firebase_user = decoded_token
+        return route_handler(*args, **kwargs)
+
+    return decorated_handler
 
 # Initialize GCS client
 storage_client = storage.Client()
@@ -32,11 +87,13 @@ def save_users_to_gcs(users):
         return False
 
 @app.route('/api/health', methods=['GET'])
+@verify_firebase_token
 def health_check():
     """Health check endpoint."""
     return jsonify({"status": "healthy"}), 200
 
 @app.route('/api/users', methods=['GET'])
+@verify_firebase_token
 def get_all_users():
     """Retrieve all users."""
     users = get_users_from_gcs()
@@ -45,6 +102,7 @@ def get_all_users():
     return jsonify(users), 200
 
 @app.route('/api/users/<int:user_id>', methods=['GET'])
+@verify_firebase_token
 def get_user(user_id):
     """Retrieve a specific user by ID."""
     users = get_users_from_gcs()
@@ -56,6 +114,7 @@ def get_user(user_id):
     return jsonify(user), 200
 
 @app.route('/api/users', methods=['POST'])
+@verify_firebase_token
 def create_user():
     """Create a new user."""
     data = request.get_json()
@@ -69,6 +128,7 @@ def create_user():
     new_id = max([u['id'] for u in users]) + 1 if users else 1
     new_user = {
         "id": new_id,
+        "uid": request.firebase_user["uid"],
         "name": data.get('name'),
         "email": data.get('email'),
         "age": data.get('age'),
@@ -83,6 +143,7 @@ def create_user():
     return jsonify({"error": "Failed to create user"}), 500
 
 @app.route('/api/users/<int:user_id>', methods=['PUT'])
+@verify_firebase_token
 def update_user(user_id):
     """Update an existing user."""
     data = request.get_json()
@@ -94,23 +155,24 @@ def update_user(user_id):
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    user.update({k: v for k, v in data.items() if v is not None})
+    user.update({k: v for k, v in data.items() if k not in {'id', 'uid'} and v is not None})
     if save_users_to_gcs(users):
         return jsonify(user), 200
     return jsonify({"error": "Failed to update user"}), 500
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@verify_firebase_token
 def delete_user(user_id):
     """Delete a user."""
     users = get_users_from_gcs()
     if isinstance(users, tuple):
         return users
     
-    users = [u for u in users if u['id'] != user_id]
-    if len(users) == len(get_users_from_gcs()):
+    remaining_users = [u for u in users if u['id'] != user_id]
+    if len(remaining_users) == len(users):
         return jsonify({"error": "User not found"}), 404
     
-    if save_users_to_gcs(users):
+    if save_users_to_gcs(remaining_users):
         return jsonify({"message": "User deleted successfully"}), 200
     return jsonify({"error": "Failed to delete user"}), 500
 
